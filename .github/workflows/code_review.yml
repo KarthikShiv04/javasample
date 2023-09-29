@@ -1,0 +1,61 @@
+name: ChatGPT automated Code Review
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+
+jobs:
+  code_review:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.x
+
+      - name: Install dependencies
+        run: pip install requests openai pyGithub  # Add any other dependencies you need
+
+      - name: SonarQube Analysis
+        run: |
+          # Install SonarScanner (adjust the version as needed)
+          wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.6.2.2472-linux.zip
+          unzip sonar-scanner-cli-4.6.2.2472-linux.zip
+          export PATH="$PWD/sonar-scanner-4.6.2.2472-linux/bin:$PATH"
+
+          # Run SonarScanner
+          sonar-scanner -Dsonar.host.url=${{ secrets.SONARQUBE_URL }} -Dsonar.login=${{ secrets.SONARQUBE_TOKEN }} -Dsonar.projectKey=chatgpt-CodeReview
+        env:
+          SONARQUBE_URL: ${{ secrets.SONARQUBE_URL }}
+          SONARQUBE_TOKEN: ${{ secrets.SONARQUBE_TOKEN }}
+
+      - name: Analyze SonarQube Finding using ChatGPT
+        run: python code-review.py
+        env:
+          SONARQUBE_URL: ${{ secrets.SONARQUBE_URL }}
+          SONARQUBE_TOKEN: ${{ secrets.SONARQUBE_TOKEN }}
+          CHATGPT_API_URL: ${{ secrets.CHATGPT_API_URL }}
+          CHATGPT_API_KEY: ${{ secrets.CHATGPT_API_KEY }}
+          CHATGPT_DEPLOYMENT_ID: ${{ secrets.CHATGPT_DEPLOYMENT_ID }}
+          GITHUB_PR_ID: ${{ github.event.number }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          SONARQUBE_PROJECT_KEY:  ${{ secrets.SONARQUBE_PROJECT_KEY }}
+            # Check the Quality Gate status.
+            
+      - name: SonarQube Quality Gate check
+        id: sonarqube-quality-gate-check
+        uses: sonarsource/sonarqube-quality-gate-action@master
+        with:
+          args: >
+            -Dsonar.projectKey=${{ secrets.SONARQUBE_PROJECT_KEY }}
+            -Dsonar.qualitygate.wait=false
+        env:
+         SONAR_TOKEN: ${{ secrets.SONARQUBE_TOKEN }}
+         SONAR_HOST_URL: ${{ secrets.SONARQUBE_URL }} 
+          
